@@ -2,10 +2,13 @@ import fs from "fs/promises";
 import path from "path";
 import matter from "gray-matter";
 
+const isVercel = !!process.env.VERCEL;
 const CONTENT_DIR = path.join(process.cwd(), "content");
 const TOPICS_FILE = path.join(CONTENT_DIR, "topics.txt");
 const STATE_FILE = path.join(CONTENT_DIR, "state.json");
-const PUBLISHED_DIR = path.join(CONTENT_DIR, "published");
+const PUBLISHED_DIR = isVercel
+  ? path.join("/tmp", "published")
+  : path.join(CONTENT_DIR, "published");
 
 export function slugify(text: string): string {
   return text
@@ -42,6 +45,7 @@ export async function saveMarkdown(
   filename: string,
   content: string
 ): Promise<void> {
+  await fs.mkdir(PUBLISHED_DIR, { recursive: true });
   const dirPath = path.join(PUBLISHED_DIR, `${date}-${slug}`);
   await fs.mkdir(dirPath, { recursive: true });
   const filePath = path.join(dirPath, filename);
