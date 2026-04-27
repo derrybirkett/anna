@@ -65,7 +65,7 @@ export interface ArticleMetadata {
 }
 
 export async function getAllArticles(): Promise<ArticleMetadata[]> {
-  if (isVercel) {
+  if (isVercel && process.env.BLOB_READ_WRITE_TOKEN) {
     const { blobs } = await list({ prefix: "published/", limit: 1000 });
 
     const articleBlobs = blobs.filter((b) => b.pathname.endsWith("/article.md"));
@@ -136,7 +136,7 @@ export async function getArticle(slug: string): Promise<{
   topic: string;
   content: string;
 } | null> {
-  if (isVercel) {
+  if (isVercel && process.env.BLOB_READ_WRITE_TOKEN) {
     try {
       const blobPath = `published/${slug}/article.md`;
       const blob = await head(blobPath);
