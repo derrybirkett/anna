@@ -1,14 +1,12 @@
 import fs from "fs/promises";
 import path from "path";
 import matter from "gray-matter";
+import { list, put, head } from "@vercel/blob";
 
 const isVercel = !!process.env.VERCEL;
 const CONTENT_DIR = path.join(process.cwd(), "content");
 const TOPICS_FILE = path.join(CONTENT_DIR, "topics.txt");
 const STATE_FILE = path.join(CONTENT_DIR, "state.json");
-const PUBLISHED_DIR = isVercel
-  ? path.join("/tmp", "published")
-  : path.join(CONTENT_DIR, "published");
 
 export function slugify(text: string): string {
   return text
@@ -45,11 +43,17 @@ export async function saveMarkdown(
   filename: string,
   content: string
 ): Promise<void> {
-  await fs.mkdir(PUBLISHED_DIR, { recursive: true });
-  const dirPath = path.join(PUBLISHED_DIR, `${date}-${slug}`);
-  await fs.mkdir(dirPath, { recursive: true });
-  const filePath = path.join(dirPath, filename);
-  await fs.writeFile(filePath, content, "utf-8");
+  if (isVercel) {
+    const blobPath = `published/${date}-${slug}/${filename}`;
+    await put(blobPath, content, { access: "public" });
+  } else {
+    const PUBLISHED_DIR = path.join(CONTENT_DIR, "published");
+    await fs.mkdir(PUBLISHED_DIR, { recursive: true });
+    const dirPath = path.join(PUBLISHED_DIR, `${date}-${slug}`);
+    await fs.mkdir(dirPath, { recursive: true });
+    const filePath = path.join(dirPath, filename);
+    await fs.writeFile(filePath, content, "utf-8");
+  }
 }
 
 export interface ArticleMetadata {
@@ -61,38 +65,69 @@ export interface ArticleMetadata {
 }
 
 export async function getAllArticles(): Promise<ArticleMetadata[]> {
-  try {
-    await fs.access(PUBLISHED_DIR);
-  } catch {
-    return [];
-  }
+  if (isVercel) {
+    const { blobs } = await list({ prefix: "published/", limit: 1000 });
 
-  const dirs = await fs.readdir(PUBLISHED_DIR);
-  const articles: ArticleMetadata[] = [];
+    const articleBlobs = blobs.filter((b) => b.pathname.endsWith("/article.md"));
+    const articles: ArticleMetadata[] = [];
 
-  for (const dir of dirs) {
-    if (dir === ".gitkeep") continue;
+    for (const blob of articleBlobs) {
+      try {
+        const response = await fetch(blob.url);
+        const content = await response.text();
+        const { data, content: body } = matter(content);
 
-    const articlePath = path.join(PUBLISHED_DIR, dir, "article.md");
-    try {
-      const content = await fs.readFile(articlePath, "utf-8");
-      const { data, content: body } = matter(content);
+        const slug = blob.pathname.split("/")[1];
+        const excerpt = body.replace(/^#.*$/gm, "").trim().slice(0, 200);
 
-      const excerpt = body.replace(/^#.*$/gm, "").trim().slice(0, 200);
-
-      articles.push({
-        slug: dir,
-        title: data.title || "Untitled",
-        date: data.date || dir.split("-").slice(0, 3).join("-"),
-        topic: data.topic || "",
-        excerpt,
-      });
-    } catch (error) {
-      console.error(`Error reading article ${dir}:`, error);
+        articles.push({
+          slug,
+          title: data.title || "Untitled",
+          date: data.date || slug.split("-").slice(0, 3).join("-"),
+          topic: data.topic || "",
+          excerpt,
+        });
+      } catch (error) {
+        console.error(`Error reading article from blob:`, error);
+      }
     }
-  }
 
-  return articles.sort((a, b) => b.date.localeCompare(a.date));
+    return articles.sort((a, b) => b.date.localeCompare(a.date));
+  } else {
+    const PUBLISHED_DIR = path.join(CONTENT_DIR, "published");
+    try {
+      await fs.access(PUBLISHED_DIR);
+    } catch {
+      return [];
+    }
+
+    const dirs = await fs.readdir(PUBLISHED_DIR);
+    const articles: ArticleMetadata[] = [];
+
+    for (const dir of dirs) {
+      if (dir === ".gitkeep") continue;
+
+      const articlePath = path.join(PUBLISHED_DIR, dir, "article.md");
+      try {
+        const content = await fs.readFile(articlePath, "utf-8");
+        const { data, content: body } = matter(content);
+
+        const excerpt = body.replace(/^#.*$/gm, "").trim().slice(0, 200);
+
+        articles.push({
+          slug: dir,
+          title: data.title || "Untitled",
+          date: data.date || dir.split("-").slice(0, 3).join("-"),
+          topic: data.topic || "",
+          excerpt,
+        });
+      } catch (error) {
+        console.error(`Error reading article ${dir}:`, error);
+      }
+    }
+
+    return articles.sort((a, b) => b.date.localeCompare(a.date));
+  }
 }
 
 export async function getArticle(slug: string): Promise<{
@@ -101,19 +136,39 @@ export async function getArticle(slug: string): Promise<{
   topic: string;
   content: string;
 } | null> {
-  const articlePath = path.join(PUBLISHED_DIR, slug, "article.md");
+  if (isVercel) {
+    try {
+      const blobPath = `published/${slug}/article.md`;
+      const blob = await head(blobPath);
+      const response = await fetch(blob.url);
+      const fileContent = await response.text();
+      const { data, content } = matter(fileContent);
 
-  try {
-    const fileContent = await fs.readFile(articlePath, "utf-8");
-    const { data, content } = matter(fileContent);
+      return {
+        title: data.title || "Untitled",
+        date: data.date || "",
+        topic: data.topic || "",
+        content,
+      };
+    } catch (error) {
+      return null;
+    }
+  } else {
+    const PUBLISHED_DIR = path.join(CONTENT_DIR, "published");
+    const articlePath = path.join(PUBLISHED_DIR, slug, "article.md");
 
-    return {
-      title: data.title || "Untitled",
-      date: data.date || "",
-      topic: data.topic || "",
-      content,
-    };
-  } catch (error) {
-    return null;
+    try {
+      const fileContent = await fs.readFile(articlePath, "utf-8");
+      const { data, content } = matter(fileContent);
+
+      return {
+        title: data.title || "Untitled",
+        date: data.date || "",
+        topic: data.topic || "",
+        content,
+      };
+    } catch (error) {
+      return null;
+    }
   }
 }
