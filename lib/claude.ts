@@ -34,7 +34,7 @@ export async function callClaude(
           "X-Title": "Systems Thinking Blog",
         },
         body: JSON.stringify({
-          model: "anthropic/claude-sonnet-4",
+          model: "openai/gpt-4o",
           messages,
           max_tokens: 4096,
         }),
