@@ -41,7 +41,7 @@ export default async function ArticlePage({
 
         <div className="prose prose-zinc dark:prose-invert max-w-none prose-headings:font-semibold prose-a:text-black dark:prose-a:text-white prose-a:no-underline hover:prose-a:underline">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>
-            {article.content}
+            {article.content.replace(/^#\s+.+$/m, "")}
           </ReactMarkdown>
         </div>
       </article>
