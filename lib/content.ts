@@ -61,6 +61,12 @@ export interface ArticleMetadata {
 }
 
 export async function getAllArticles(): Promise<ArticleMetadata[]> {
+  try {
+    await fs.access(PUBLISHED_DIR);
+  } catch {
+    return [];
+  }
+
   const dirs = await fs.readdir(PUBLISHED_DIR);
   const articles: ArticleMetadata[] = [];
 
