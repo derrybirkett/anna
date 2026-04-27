@@ -1,9 +1,3 @@
-import Anthropic from "@anthropic-ai/sdk";
-
-const client = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
-
 export async function callClaude(
   prompt: string,
   cachedContext?: string
@@ -13,18 +7,12 @@ export async function callClaude(
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const messages: Anthropic.MessageParam[] = [];
+      const messages = [];
 
       if (cachedContext) {
         messages.push({
           role: "user",
-          content: [
-            {
-              type: "text",
-              text: cachedContext,
-              cache_control: { type: "ephemeral" },
-            },
-          ],
+          content: cachedContext,
         });
         messages.push({
           role: "assistant",
@@ -37,18 +25,34 @@ export async function callClaude(
         content: prompt,
       });
 
-      const response = await client.messages.create({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 4096,
-        messages,
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000",
+          "X-Title": "Systems Thinking Blog",
+        },
+        body: JSON.stringify({
+          model: "anthropic/claude-sonnet-4",
+          messages,
+          max_tokens: 4096,
+        }),
       });
 
-      const textContent = response.content.find((c) => c.type === "text");
-      if (!textContent || textContent.type !== "text") {
-        throw new Error("No text content in response");
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`OpenRouter API error: ${response.status} - ${error}`);
       }
 
-      return textContent.text;
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content;
+
+      if (!content) {
+        throw new Error("No content in response");
+      }
+
+      return content;
     } catch (error) {
       lastError = error as Error;
       console.error(`Attempt ${attempt} failed:`, error);
