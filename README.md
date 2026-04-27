@@ -4,7 +4,7 @@ Auto-publishing blog for systems thinking research, synthesis, and writing. Ever
 
 ## Features
 
-- 🤖 Fully automated content generation using Claude API
+- 🤖 Fully automated content generation using Claude via OpenRouter
 - 📅 Weekly publishing via Vercel Cron (every Thursday at 10am UTC)
 - 📝 4-step workflow: Research → Synthesis → Article → Workshop
 - 🎨 Clean, minimal blog interface
@@ -20,7 +20,7 @@ Auto-publishing blog for systems thinking research, synthesis, and writing. Ever
 2. **Configure environment variables:**
    Copy `.env.local.example` to `.env.local` and add:
    ```
-   ANTHROPIC_API_KEY=sk-ant-your-key-here
+   OPENROUTER_API_KEY=sk-or-v1-your-key-here
    VERCEL_CRON_SECRET=your-random-secret-here
    ```
 
@@ -79,7 +79,7 @@ Edit `content/topics.txt` and add one topic per line.
 - Next.js 15 (App Router)
 - TypeScript
 - Tailwind CSS
-- Claude API (Anthropic SDK)
+- Claude via OpenRouter API
 - Vercel (hosting + cron)
 
 Total lines of code: ~450 (excluding node_modules)
