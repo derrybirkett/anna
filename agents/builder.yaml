@@ -1,0 +1,24 @@
+advisor: builder
+enabled: true
+schedule: daily
+on_demand: true
+
+repo:
+  name: anna
+  path: .
+
+github:
+  repo: derrybirkett/anna
+  labels:
+    - build
+    - complex
+    - pr
+
+target_labels:
+  - build
+
+complex_label: complex
+
+output:
+  pr_title_prefix: "[Builder]"
+  max_prs_per_run: 1
