@@ -64,7 +64,7 @@ export async function fetchBuildIssues(
     number: issue.number,
     title: issue.title,
     body: issue.body || "",
-    labels: issue.labels.map((l) => (typeof l === "string" ? l : l.name)),
+    labels: issue.labels.map((l) => (typeof l === "string" ? l : l.name || "")).filter(Boolean),
   }));
 }
 
@@ -155,7 +155,7 @@ async function implementSimpleTask(
     message: `docs: add stars badge (closes #${issue.number})`,
     content: Buffer.from(newReadme).toString("base64"),
     branch: branchName,
-    sha: existingReadme,
+    sha: existingReadme || undefined,
   });
 
   console.log(`  → Updated README.md`);
