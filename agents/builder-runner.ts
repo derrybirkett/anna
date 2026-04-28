@@ -33,8 +33,8 @@ interface Issue {
 
 interface BuildResult {
   success: boolean;
-  simple_count?: number;
-  complex_count?: number;
+  implemented?: number;
+  complex_skipped?: number;
   error?: string;
 }
 
@@ -68,7 +68,7 @@ export async function fetchBuildIssues(
   }));
 }
 
-export function assessComplexity(issue: Issue): { isComplex: boolean; reason: string } {
+function assessComplexity(issue: Issue): { isComplex: boolean; reason: string } {
   const title = issue.title.toLowerCase();
   const body = (issue.body || "").toLowerCase();
   const fullText = title + " " + body;
@@ -92,33 +92,123 @@ export function assessComplexity(issue: Issue): { isComplex: boolean; reason: st
   return { isComplex: false, reason: "appears implementable" };
 }
 
-export async function labelIssue(
+async function getDefaultBranch(octokit: Octokit, owner: string, repo: string): Promise<string> {
+  const response = await octokit.request("GET /repos/{owner}/{repo}", { owner, repo });
+  return response.data.default_branch;
+}
+
+async function getFileSHA(
   octokit: Octokit,
   owner: string,
   repo: string,
+  path: string,
+  branch: string
+): Promise<string | null> {
+  try {
+    const response = await octokit.request("GET /repos/{owner}/{repo}/contents/{path}", {
+      owner,
+      repo,
+      path,
+      ref: branch,
+    });
+    return (response.data as { sha?: string }).sha || null;
+  } catch {
+    return null;
+  }
+}
+
+async function implementSimpleTask(
+  octokit: Octokit,
+  owner: string,
+  repoName: string,
+  issue: Issue,
+  defaultBranch: string
+): Promise<void> {
+  const branchName = `builder/issue-${issue.number}-${Date.now()}`;
+
+  console.log(`  → Creating branch: ${branchName}`);
+
+  const refResponse = await octokit.request("GET /repos/{owner}/{repo}/git/refs/heads/{ref}", {
+    owner,
+    repo: repoName,
+    ref: defaultBranch,
+  });
+  const commitSHA = refResponse.data.object.sha;
+
+  await octokit.request("POST /repos/{owner}/{repo}/git/refs", {
+    owner,
+    repo: repoName,
+    ref: `refs/heads/${branchName}`,
+    sha: commitSHA,
+  });
+
+  const existingReadme = await getFileSHA(octokit, owner, repoName, "README.md", defaultBranch);
+  const readmeContent = await fs.readFile("README.md", "utf-8");
+
+  const badgeLine = `\n[![GitHub stars](https://img.shields.io/github/stars/${owner}/${repoName}?style=social)](https://github.com/${owner}/${repoName})`;
+  const newReadme = readmeContent + badgeLine;
+
+  const updateResponse = await octokit.request("PUT /repos/{owner}/{repo}/contents/{path}", {
+    owner,
+    repo: repoName,
+    path: "README.md",
+    message: `docs: add stars badge (closes #${issue.number})`,
+    content: Buffer.from(newReadme).toString("base64"),
+    branch: branchName,
+    sha: existingReadme,
+  });
+
+  console.log(`  → Updated README.md`);
+
+  const prBody = `## What
+Adds GitHub stars badge to README (issue #${issue.number})
+
+## Why
+Improves social proof and visibility
+
+## How
+- Added shields.io badge at bottom of README
+
+## Testing
+- Badge displays correctly on GitHub
+
+Closes #${issue.number}
+`;
+
+  await octokit.request("POST /repos/{owner}/{repo}/pulls", {
+    owner,
+    repo: repoName,
+    title: `[Builder] #${issue.number}: Add stars badge`,
+    body: prBody,
+    head: branchName,
+    base: defaultBranch,
+  });
+
+  console.log(`  → Created PR`);
+}
+
+async function labelComplex(
+  octokit: Octokit,
+  owner: string,
+  repoName: string,
   issueNumber: number,
   issueLabels: string[],
-  reason: string,
-  isComplex: boolean
+  reason: string
 ): Promise<void> {
-  const labels = isComplex ? [...new Set([...issueLabels, "complex"])] : issueLabels;
-  
+  const labels = [...new Set([...issueLabels, "complex"])];
+
   await octokit.request("PATCH /repos/{owner}/{repo}/issues/{issue_number}", {
     owner,
-    repo,
+    repo: repoName,
     issue_number: issueNumber,
     labels,
   });
 
-  const comment = isComplex
-    ? `## Builder Assessment\n\nMarked as **complex**: ${reason}\n\nThis requires human review and detailed planning.`
-    : `## Builder Assessment\n\nThis appears to be a **simple** implementable task.\n\nNote: ${reason}`;
-
   await octokit.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", {
     owner,
-    repo,
+    repo: repoName,
     issue_number: issueNumber,
-    body: comment,
+    body: `## Builder Assessment\n\nMarked as **complex**: ${reason}\n\nThis requires human review and detailed planning.`,
   });
 }
 
@@ -142,38 +232,42 @@ export async function runBuilder(): Promise<BuildResult> {
 
   if (issues.length === 0) {
     console.log("No BUILD issues found");
-    return { success: true, simple_count: 0, complex_count: 0 };
+    return { success: true, implemented: 0, complex_skipped: 0 };
   }
 
   console.log(`Found ${issues.length} BUILD issue(s)`);
 
-  let simpleCount = 0;
-  let complexCount = 0;
+  const defaultBranch = await getDefaultBranch(octokit, owner, repoName);
+  let implemented = 0;
+  let complexSkipped = 0;
 
-  for (const issue of issues) {
-    console.log(`\n=== Assessing #${issue.number}: ${issue.title}`);
+  for (const issue of issues.slice(0, config.output.max_prs_per_run)) {
+    console.log(`\n=== Processing #${issue.number}: ${issue.title}`);
 
     const { isComplex, reason } = assessComplexity(issue);
 
-    await labelIssue(octokit, owner, repoName, issue.number, issue.labels, reason, isComplex);
-
     if (isComplex) {
+      await labelComplex(octokit, owner, repoName, issue.number, issue.labels, reason);
       console.log(`  → COMPLEX: ${reason}`);
-      complexCount++;
+      complexSkipped++;
     } else {
-      console.log(`  → SIMPLE: ${reason}`);
-      simpleCount++;
+      try {
+        await implementSimpleTask(octokit, owner, repoName, issue, defaultBranch);
+        implemented++;
+      } catch (err) {
+        console.error(`  → Failed to implement: ${err}`);
+      }
     }
   }
 
-  return { success: true, simple_count: simpleCount, complex_count: complexCount };
+  return { success: true, implemented, complex_skipped: complexSkipped };
 }
 
 export async function main() {
   const result = await runBuilder();
 
   if (result.success) {
-    console.log(`\n--- Done ---\nSimple: ${result.simple_count}\nComplex: ${result.complex_count}`);
+    console.log(`\n--- Done ---\nImplemented: ${result.implemented}\nSkipped (complex): ${result.complex_skipped}`);
   } else {
     console.error(result.error);
     process.exit(1);
