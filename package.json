@@ -6,10 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "review": "npx tsx agents/runner.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",
+    "@octokit/core": "^7.0.6",
     "@tailwindcss/typography": "^0.5.19",
     "@vercel/blob": "^2.3.3",
     "gray-matter": "^4.0.3",
@@ -17,7 +19,8 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "yaml": "^2.8.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -27,6 +30,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }

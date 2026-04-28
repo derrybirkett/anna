@@ -1,0 +1,34 @@
+advisor: product
+enabled: true
+schedule: weekly
+on_demand: true
+
+repo:
+  name: anna
+  path: .
+
+advisor_config:
+  playbook: repo-review
+  model: claude-sonnet-4-20250514
+  max_tokens: 4096
+
+files_to_review:
+  - README.md
+  - package.json
+  - lib/workflow.ts
+  - lib/content.ts
+  - lib/claude.ts
+  - app/page.tsx
+  - AGENTS.md
+  - content/topics.txt
+  - content/state.json
+
+github:
+  repo: derrybirkett/anna
+  labels:
+    - product-review
+    - enhancement
+
+output:
+  format: markdown
+  title_prefix: "Product Review:"
