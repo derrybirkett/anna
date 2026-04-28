@@ -1,0 +1,55 @@
+name: Council Developer Agent
+
+on:
+  schedule:
+    - cron: "0 11 * * 0"  # Weekly Sunday at 11am UTC (after Product Review)
+    - cron: "0 12 * * *"  # Daily at 12pm UTC (PR recovery)
+  workflow_dispatch:
+
+jobs:
+  develop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install council as sibling
+        run: |
+          git clone https://github.com/anomalyco/council.git ../council
+
+      - name: Run Developer Agent
+        run: npx tsx agents/developer-runner.ts
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+  recover-prs:
+    runs-on: ubuntu-latest
+    if: github.event.schedule
+    steps:
+      - name: Check failing PR builds
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          echo "Checking for failing builds on open PRs..."
+          
+          # Check latest run for each PR
+          gh run list --repo ${{ github.repository }} --status failure -L 10 --json number,name,headBranch,conclusion,createdAt | jq -r '.[] | select(.conclusion == "failure") | "#\(.number) \(.name) - \(.headBranch)"' || echo "No failing builds found"
+          
+          # Get failing runs from builder branches
+          for pr in $(gh pr list --state open --repo ${{ github.repository }} --json number,title | jq -r '.[] | @tsv'); do
+            echo "Checking PR state for: $pr"
+          done
+
+      - name: Report status
+        run: |
+          echo "Daily PR recovery check completed"

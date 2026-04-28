@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "review": "npx tsx agents/runner.ts",
-    "builder": "npx tsx agents/builder-runner.ts"
+    "builder": "npx tsx agents/developer-runner.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",

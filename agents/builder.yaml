@@ -1,4 +1,4 @@
-advisor: builder
+advisor: developer
 enabled: true
 schedule: daily
 on_demand: true
@@ -20,5 +20,5 @@ target_labels:
 complex_label: complex
 
 output:
-  pr_title_prefix: "[Builder]"
+  pr_title_prefix: "[Developer]"
   max_prs_per_run: 1
