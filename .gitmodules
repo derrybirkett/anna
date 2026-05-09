@@ -1,3 +1,6 @@
 [submodule "council"]
 	path = council
 	url = https://github.com/derrybirkett/council.git
+[submodule "shulkerbox"]
+	path = shulkerbox
+	url = https://github.com/derrybirkett/shulkerbox.git
