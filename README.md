@@ -83,3 +83,5 @@ Edit `content/topics.txt` and add one topic per line.
 - Vercel (hosting + cron)
 
 Total lines of code: ~450 (excluding node_modules)
+
+[![GitHub stars](https://img.shields.io/github/stars/derrybirkett/anna?style=social)](https://github.com/derrybirkett/anna)
